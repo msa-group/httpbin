@@ -70,8 +70,16 @@ ENV_COOKIES = (
     "__utmb",
 )
 
+
+def pad_base64url(b64string):
+    return b64string + '=' * (4 - len(b64string) % 4)
+
+
 ISSUER = 'httpbin.org'
-SECRET_KEY = os.environ.get("SECRET_KEY") or 'some random secrete key'
+jwk_key = '6fYeKzXqP2FKV9INaq62tGG5Ypc3hLQZzsao3ULosHGGFuECmnspfcZT6ran3KlKEMvo_eR7eohjzbdmuPe6A3k2CRW3ZEr8LKQtHjlNY-fmjWX6rcyiRX26U3bPfEmrQWmlOVghDaAqPw0AUg0HfjgAGQrXw4iuyxqOI37tNi9jpIxYdOiKjSmUQVJ6rHDeqRT9KL6-dd9BPZ2hvSw_iEqr_R568qPvZv8oz3TQSveeavHFkakFIXfRfhvueeA5uGWD3MzIuY6a81uqFZ1JiMIy__BNIrEVO1oaTSf1J0XxFnqm7NtYtNDS0uX6NVVRZ-EGquAM8lg6xwNPDfeBjA'
+default_secret = base64.urlsafe_b64decode(pad_base64url(jwk_key))
+SECRET_KEY = os.environ.get("SECRET_KEY") or default_secret
+print(SECRET_KEY)
 
 
 def jsonify(*args, **kwargs):
