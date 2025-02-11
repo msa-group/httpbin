@@ -14,6 +14,7 @@ import random
 import time
 import uuid
 import argparse
+import datetime
 
 from flask import (
     Flask,
@@ -32,6 +33,7 @@ from werkzeug.http import http_date
 from werkzeug.wrappers import BaseResponse
 from werkzeug.http import parse_authorization_header
 from flasgger import Swagger, NO_SANITIZER
+import jwt
 
 from . import filters
 from .helpers import (
@@ -68,6 +70,9 @@ ENV_COOKIES = (
     "__utmb",
 )
 
+ISSUER = 'httpbin.org'
+SECRET_KEY = os.environ.get("SECRET_KEY") or 'some random secrete key'
+
 
 def jsonify(*args, **kwargs):
     response = flask_jsonify(*args, **kwargs)
@@ -80,13 +85,15 @@ def jsonify(*args, **kwargs):
 BaseResponse.autocorrect_location_header = False
 
 # Find the correct template folder when running from a different location
-tmpl_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+tmpl_dir = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), "templates")
 
 app = Flask(__name__, template_folder=tmpl_dir)
 app.debug = bool(os.environ.get("DEBUG"))
 app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
 
-app.add_template_global("HTTPBIN_TRACKING" in os.environ, name="tracking_enabled")
+app.add_template_global("HTTPBIN_TRACKING" in os.environ,
+                        name="tracking_enabled")
 
 app.config["SWAGGER"] = {"title": "httpbin.org", "uiversion": 3}
 
@@ -158,7 +165,8 @@ swagger_config = {
     "specs_route": "/",
 }
 
-swagger = Swagger(app, sanitizer=NO_SANITIZER, template=template, config=swagger_config)
+swagger = Swagger(app, sanitizer=NO_SANITIZER,
+                  template=template, config=swagger_config)
 
 # Set up Bugsnag exception tracking, if desired. To use Bugsnag, install the
 # Bugsnag Python client with the command "pip install bugsnag", and set the
@@ -199,6 +207,16 @@ empties the input request stream.
 
 @app.before_request
 def before_request():
+    # # jwt验证
+    # if request.headers.get("Authorization", "").startswith("Bearer "):
+    #     token = request.headers.get("Authorization", "").split(" ")[1]
+    #     try:
+    #         payload = jwt.decode(
+    #             token, SECRET_KEY, algorithms=["HS256"])
+    #     except jwt.ExpiredSignatureError:
+    #         return jsonify(code=401, msg="token已过期，请重新登录！")
+    #     except jwt.InvalidTokenError:
+  #         return jsonify(code=401, msg="非法的token，请重新登录！")
     if request.environ.get("HTTP_TRANSFER_ENCODING", "").lower() == "chunked":
         server = request.environ.get("SERVER_SOFTWARE", "")
         if server.lower().startswith("gunicorn/"):
@@ -211,11 +229,15 @@ def before_request():
                 request.environ["wsgi.input_terminated"] = 1
         else:
             abort(501, "Chunked requests are not supported for server %s" % server)
+    # elif request.endpoint != 'create_jwt':
+    #     print(request.endpoint)
+    #     return jsonify(code=401, msg="缺少token信息！")
 
 
 @app.after_request
 def set_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = request.headers.get("Origin", "*")
+    response.headers["Access-Control-Allow-Origin"] = request.headers.get(
+        "Origin", "*")
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
     if request.method == "OPTIONS":
@@ -235,6 +257,32 @@ def set_cors_headers(response):
 # ------
 # Routes
 # ------
+
+
+@app.route('/jwt-test')
+def verify_jwt():
+    if request.headers.get("Authorization", "").startswith("Bearer "):
+        token = request.headers.get("Authorization", "").split(" ")[1]
+        try:
+            payload = jwt.decode(
+                token, SECRET_KEY, algorithms=["HS256"])
+            return payload
+        except jwt.ExpiredSignatureError:
+            return jsonify(code=401, msg="token已过期，请重新登录！")
+        except jwt.InvalidTokenError:
+            return jsonify(code=401, msg="非法的token，请重新登录！")
+    else:
+        return jsonify(code=401, msg="缺少token信息！")
+
+
+@app.route('/create-jwt', methods=['POST'])
+def create_jwt():
+    token = jwt.encode({
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1),
+        'iat': datetime.datetime.utcnow(),
+        'iss': ISSUER,
+    }, SECRET_KEY)
+    return jsonify(code=200, msg="ok", data={"token": token})
 
 
 @app.route("/legacy")
@@ -425,7 +473,8 @@ def view_post():
     """
 
     return jsonify(
-        get_dict("url", "args", "form", "data", "origin", "headers", "files", "json")
+        get_dict("url", "args", "form", "data",
+                 "origin", "headers", "files", "json")
     )
 
 
@@ -443,7 +492,8 @@ def view_put():
     """
 
     return jsonify(
-        get_dict("url", "args", "form", "data", "origin", "headers", "files", "json")
+        get_dict("url", "args", "form", "data",
+                 "origin", "headers", "files", "json")
     )
 
 
@@ -461,7 +511,8 @@ def view_patch():
     """
 
     return jsonify(
-        get_dict("url", "args", "form", "data", "origin", "headers", "files", "json")
+        get_dict("url", "args", "form", "data",
+                 "origin", "headers", "files", "json")
     )
 
 
@@ -479,7 +530,8 @@ def view_delete():
     """
 
     return jsonify(
-        get_dict("url", "args", "form", "data", "origin", "headers", "files", "json")
+        get_dict("url", "args", "form", "data",
+                 "origin", "headers", "files", "json")
     )
 
 
@@ -565,7 +617,8 @@ def redirect_n_times(n):
 
 def _redirect(kind, n, external):
     return redirect(
-        url_for("{0}_redirect_n_times".format(kind), n=n - 1, _external=external)
+        url_for("{0}_redirect_n_times".format(
+            kind), n=n - 1, _external=external)
     )
 
 
@@ -670,7 +723,8 @@ def relative_redirect_n_times(n):
         response.headers["Location"] = url_for("view_get")
         return response
 
-    response.headers["Location"] = url_for("relative_redirect_n_times", n=n - 1)
+    response.headers["Location"] = url_for(
+        "relative_redirect_n_times", n=n - 1)
     return response
 
 
@@ -1256,7 +1310,8 @@ def drip():
     """
     args = CaseInsensitiveDict(request.args.items())
     duration = float(args.get("duration", 2))
-    numbytes = min(int(args.get("numbytes", 10)), (10 * 1024 * 1024))  # set 10MB limit
+    numbytes = min(int(args.get("numbytes", 10)),
+                   (10 * 1024 * 1024))  # set 10MB limit
     code = int(args.get("code", 200))
 
     if numbytes <= 0:
@@ -1364,7 +1419,8 @@ def etag(etag):
         description: match
 
     """
-    if_none_match = parse_multi_value_header(request.headers.get("If-None-Match"))
+    if_none_match = parse_multi_value_header(
+        request.headers.get("If-None-Match"))
     if_match = parse_multi_value_header(request.headers.get("If-Match"))
 
     if if_none_match:
@@ -1529,7 +1585,8 @@ def range_request(numbytes):
     pause_per_byte = duration / numbytes
 
     request_headers = get_headers()
-    first_byte_pos, last_byte_pos = get_request_range(request_headers, numbytes)
+    first_byte_pos, last_byte_pos = get_request_range(
+        request_headers, numbytes)
     range_length = (last_byte_pos + 1) - first_byte_pos
 
     if (
@@ -1565,7 +1622,8 @@ def range_request(numbytes):
             time.sleep(pause_per_byte * len(chunks))
             yield (bytes(chunks))
 
-    content_range = "bytes %d-%d/%d" % (first_byte_pos, last_byte_pos, numbytes)
+    content_range = "bytes %d-%d/%d" % (first_byte_pos,
+                                        last_byte_pos, numbytes)
     response_headers = {
         "Content-Type": "application/octet-stream",
         "ETag": "range%d" % numbytes,
@@ -1726,7 +1784,7 @@ def image_svg():
 def resource(filename):
     path = os.path.join(tmpl_dir, filename)
     with open(path, "rb") as f:
-      return f.read()
+        return f.read()
 
 
 @app.route("/xml")
