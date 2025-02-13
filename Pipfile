@@ -12,6 +12,7 @@ meinheld = "*"
 werkzeug = ">=0.14.1"
 six = "*"
 flasgger = "*"
+PyJWT = "*"
 pyyaml = {git = "https://github.com/yaml/pyyaml.git"}
 
 [dev-packages]
